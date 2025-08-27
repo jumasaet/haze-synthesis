@@ -15,6 +15,16 @@ import torch
 from torchvision import transforms, datasets
 import networks
 
+import warnings
+# Suprimir warnings específicos de torchvision
+warnings.filterwarnings("ignore", 
+                        message="Using 'weights' as positional parameter*",
+                        category=UserWarning)
+warnings.filterwarnings("ignore", 
+                        message="Arguments other than a weight enum*",
+                        category=UserWarning)
+
+
 def parse_args():
 
     parser = argparse.ArgumentParser(
@@ -48,6 +58,10 @@ def parse_args():
                         help='degree of haze', default=1.)
     parser.add_argument('--airlight', type=float,
                         help='atmospheric light', default=255.)
+    parser.add_argument("--device", 
+                        type=int,
+                        default=0,
+                        help='ID of the GPU to use (default: 0)')
 
     return parser.parse_args()
 
@@ -73,15 +87,24 @@ def test_simple(args):
     assert args.model_name is not None, \
         "You must specify the --model_name parameter; see README.md for an example"
 
-    if torch.cuda.is_available() and not args.no_cuda:
-        device = torch.device("cuda")
+    if args.device is not None:
+        use_cuda = torch.cuda.is_available() and not args.no_cuda
+        device = torch.device(f"cuda:{args.device}" if use_cuda else "cpu")
     else:
-        device = torch.device("cpu")
+        use_cuda = False
 
-    if args.pred_metric_depth and "stereo" not in args.model_name:
-        print("Warning: The --pred_metric_depth flag only makes sense for stereo-trained KITTI "
-              "models. For mono-trained models, output depths will not in metric space.")
-
+    # Verificar si la GPU específica está disponible
+    if use_cuda:
+        if args.device < torch.cuda.device_count():
+            print(f"\nUsing GPU: {torch.cuda.get_device_name(args.device)} (ID: {args.device})\n")
+        else:
+            print(f"Warning: GPU ID {args.device} not available. Using CPU instead.")
+            device = torch.device("cpu")
+            use_cuda = False
+    else:
+        print("Using device: CPU")
+        
+        
     # download_model_if_doesnt_exist(args.model_name)
     model_path = os.path.join("models", args.model_name)
     print("-> Loading model from ", model_path)
