@@ -83,6 +83,21 @@ def gen_haze(clean_img, depth_img, beta=1.0, A=150):
     return hazy
 
 
+def get_beta_category(beta, beta_values):
+    """Get category name for beta value"""
+    if len(beta_values) == 3:
+        # Asumimos que los valores están ordenados: low, medium, high
+        if beta == beta_values[0]:
+            return "low"
+        elif beta == beta_values[1]:
+            return "medium"
+        elif beta == beta_values[2]:
+            return "high"
+    
+    # Para otros casos, usar el valor numérico
+    return f"beta_{str(beta).replace('.', '_')}"
+
+
 def process_batch(images, encoder, depth_decoder, device, feed_width, feed_height, args):
     """Process a batch of images"""
     batch_tensors = []
@@ -197,7 +212,7 @@ def test_simple(args):
         paths = []
         for ext in image_extensions:
             paths.extend(glob.glob(os.path.join(args.image_path, ext)))
-            paths.extend(glob.glob(os.path.join(args.image_path, ext.upper())))
+            # paths.extend(glob.glob(os.path.join(args.image_path, ext.upper())))
         # Filter out disparity images
         paths = [p for p in paths if not any(p.endswith(ext) for ext in ['_disp.jpg', '_disp.png'])]
     else:
@@ -211,6 +226,20 @@ def test_simple(args):
 
     output_dir = args.output_image_path
 
+    # Create subdirectories for each beta category
+    beta_categories = {}
+    for beta in args.beta_values:
+        category = get_beta_category(beta, args.beta_values)
+        beta_categories[beta] = category
+        category_dir = os.path.join(output_dir, category)
+        if not os.path.exists(category_dir):
+            os.makedirs(category_dir)
+            print(f"Created directory: {category_dir}")
+
+    print(f"\nBeta categories:")
+    for beta, category in beta_categories.items():
+        print(f"  {beta} -> {category}")
+    print("")
     # PROCESS IMAGES IN BATCHES
     total_images = len(paths)
     processed_count = 0
@@ -234,9 +263,12 @@ def test_simple(args):
                         hazy = gen_haze(result['clean_img'], result['depth_map'], 
                                       beta=beta, A=args.airlight)
                         
-                        # Save with beta value in filename
-                        beta_str = str(beta).replace('.', '_')
-                        output_filename = f"{output_dir}/{output_name}_beta_{beta_str}_synt.jpg"
+                        # Get category and save in appropriate subdirectory
+                        category = beta_categories[beta]
+                        category_dir = os.path.join(output_dir, category)
+                        
+                        # Save with original filename in category directory
+                        output_filename = f"{category_dir}/{output_name}.jpg"
                         cv2.imwrite(output_filename, cv2.cvtColor(hazy, cv2.COLOR_RGB2BGR))
                 
                 processed_count += len(batch_results)
@@ -245,7 +277,7 @@ def test_simple(args):
                 # Update progress bar description
                 pbar.set_postfix({
                     'Batch': f"{batch_start//args.batch + 1}/{(total_images-1)//args.batch + 1}",
-                    'Beta': f"{args.beta_values}"
+                    'Categories': f"{list(beta_categories.values())}"
                 })
                 
             except RuntimeError as e:
@@ -265,6 +297,12 @@ def test_simple(args):
     print(f'\n-> Done! Processed {processed_count} images')
     print(f'-> Generated {processed_count * len(args.beta_values)} hazy images')
     print(f'-> Outputs saved in: {output_dir}\n')
+    # print(f'\nFolder structure:')
+    # print(f'{output_dir}/')
+    # for category in set(beta_categories.values()):
+    #     print(f'  ├── {category}/')
+    #     print(f'  │   └── [image_name]_synt.jpg')
+    # print(f'  └── (original structure preserved)\n')
 
 
 if __name__ == '__main__':
