@@ -203,7 +203,7 @@ def test_simple(args):
     else:
         raise Exception("Can not find args.image_path: {}".format(args.image_path))
 
-    print("-> Found {:d} images to process".format(len(paths)))
+    print("-> Found {:d} images to process\n".format(len(paths)))
 
     # CHECK IF OUTPUT FOLDER EXISTS
     if not os.path.isdir(args.output_image_path):
@@ -264,7 +264,7 @@ def test_simple(args):
 
     print(f'\n-> Done! Processed {processed_count} images')
     print(f'-> Generated {processed_count * len(args.beta_values)} hazy images')
-    print(f'-> Outputs saved in: {output_dir}')
+    print(f'-> Outputs saved in: {output_dir}\n')
 
 
 if __name__ == '__main__':
