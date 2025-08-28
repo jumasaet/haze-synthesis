@@ -25,11 +25,11 @@ This repo is based on the following project/packages:
 
 ## Setup
 
-- Step 1: Create virtual environment:
+- Step 1: Create virtual environment (el original usa Python 3.6 incompatible con versiones de torch que soportan GPUs nuevas):
   
 ```
-conda create -n hazesynt python=3.10
-conda activate hazesynt
+conda create -n haze python=3.10
+conda activate haze
 ```
 
 - Step 2: Install required packages as in [Monodepth2](https://github.com/nianticlabs/monodepth2) or just run this command:
