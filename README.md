@@ -51,7 +51,7 @@ python main.py --image_path ./inputs --output_image_path ./outputs --model_name 
 Para tener diferentes salidas de haze correr lo siguiente:
 
 ```
-python main.py --image_path ./inputs --output_image_path ./outputs --beta_values 0.5 0.9 2.0 --device 0
+python haze_intensity.py --image_path ./inputs --output_image_path ./outputs --beta_values 0.5 0.9 2.0 --device 0 --batch 8
 ```
 
 The values of beta and airlight can be changed (recommended: beta = [1.0,3.0], airlight = [150,255]).
