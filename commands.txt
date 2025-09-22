@@ -1,0 +1,23 @@
+# Para hacer pruebas en un pequeño dataset
+python .\main.py --invert_depth_for_haze --ext jpg --device 0 --image_path .\images\ --output_image_path ./outputs_haze --beta 1.8 --airlight 240 --thres 0.5
+
+# Para ya realizar el proceso por batches
+python batches4haze.py --day_dir M3FD/day --night_dir M3FD/night --ext png --output_root ./output_haze --variants_per_img 6 --depth_backend depth-anything-v2 --invert_depth_for_haze --binary_thres 0.55 --open_iters 1 --close_iters 1 --k_frac 0.01
+
+
+# Para aplicar la ecuación de mejora de fusión
+python .\apply_mask.py --ir_dir ..\yolov5\data\m3fd\ir\ --fus1_dir ..\yolov5\data\m3fd\sfd_haze\ --mask_cont_dir .\output_m3fd_val\norm\  --mask_bin_dir .\output_m3fd_val\clean\ --prefer cont --out_dir .\output_mask\ --save_csv
+
+
+# Niebla realista a una imagen
+python make_real.py --backend depth-anything-v2 --n-sprites 20 --noise-strength .5 --sprite-alpha-gain .5 --t-min 1 --beta 0 --airlight 0.8 --near-guard 0.25 --device cuda --sprites-dir .\fog_bank\  --global-fog 1.2 --image .\g_images\00721.png
+
+# Generar archivos npz
+python prep_sprites_bank.py --src .\fog_clouds --dst .\fog_bank --max-dim 1500
+
+# Generar máscaras de profundidad (preprocesado para ejecución de gran cantidad de imágenes)
+python depth_cache.py --images-dir .\g_images --cache-dir .\depth_cache --backend depth-anything-v2 --device cuda --strict-single --invert-depth --overwrite
+
+# GPU: Aplicar niebla realista por batches (requiere ya tener mapas de profundidad)
+python .\make_real_batch.py --images_dir .\g_images --depth_dir  .\depth_cache --outdir .\out_batch --sprites_dir .\fog_bank --n-sprites 12 --beta 1.2 --airlight 0.9 --global-fog 1.0 --gpu_mode gpu_full --device cuda:0 --batch-size 50
+python .\make_real_batch.py --images_dir .\M3FD\night\ --depth_dir  .\M3FD\night_depth\ --outdir .\M3FD\night_fog2/ --sprites_dir .\fog_bank --gpu_mode gpu_full --device cuda:0 --batch-size 8

@@ -61,7 +61,7 @@ def predict_monodepth2(backend, pil_rgb):
 # pip install "transformers>=4.43" "torch" "accelerate" "numpy" "opencv-python" "Pillow"
 def load_depth_anything_v2(model_id="depth-anything/Depth-Anything-V2-Small-hf", device="cpu"):
     from transformers import AutoImageProcessor, AutoModelForDepthEstimation
-    processor = AutoImageProcessor.from_pretrained(model_id)
+    processor = AutoImageProcessor.from_pretrained(model_id, use_fast=True)  # <<<<
     model = AutoModelForDepthEstimation.from_pretrained(model_id).to(device).eval()
     return {"type":"danythingv2", "processor":processor, "model":model, "device":device}
 
@@ -180,22 +180,54 @@ def predict_monodepth2_batch(backend, pil_list):
 
 @torch.no_grad()
 def predict_depth_anything_v2_batch(backend, pil_list):
+    import torch.nn.functional as F
     processor, model, device = backend["processor"], backend["model"], backend["device"]
-    orig_sizes = [(im.size[1], im.size[0]) for im in pil_list]  # (H,W)
-    inputs = processor(images=list(pil_list), return_tensors="pt").to(device)
-    outputs = model(**inputs)
-    pred = outputs.predicted_depth                               # [B,H',W'] o [B,1,H',W']
 
+    # Tamaños originales (H,W) para devolver cada mapa a su tamaño de imagen
+    orig_sizes = [(im.size[1], im.size[0]) for im in pil_list]  # (H,W)
+
+    # 1) Procesar cada imagen a tensor (sin padding del processor)
+    pix_list = []
+    proc_sizes = []  # tamaños de pixel_values ANTES del pad
+    for im in pil_list:
+        inp = processor(images=im, return_tensors="pt")  # pixel_values: [1,3,h,w]
+        pv = inp["pixel_values"]                         # (1,3,h,w)
+        pix_list.append(pv)
+        proc_sizes.append((pv.shape[2], pv.shape[3]))    # (h,w) válidos
+
+    # 2) Pad manual al mayor H,W del batch
+    Hm = max(h for h, _ in proc_sizes)
+    Wm = max(w for _, w in proc_sizes)
+    batch = []
+    for pv in pix_list:
+        dh = Hm - pv.shape[2]
+        dw = Wm - pv.shape[3]
+        pv_pad = F.pad(pv, (0, dw, 0, dh))               # pad a derecha/abajo
+        batch.append(pv_pad)
+    pixel_values = torch.cat(batch, dim=0).to(device)    # [B,3,Hm,Wm]
+
+    # 3) FP16/autocast para velocidad
+    use_autocast = str(device).startswith("cuda")
+    if use_autocast and hasattr(model, "half"):
+        model.half()
+    with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_autocast):
+        outputs = model(pixel_values=pixel_values)
+
+    # 4) Recortar la salida a la región válida (sin pad) y reescalar a (Horig,Worig)
+    pred = outputs.predicted_depth                       # [B,Hm,Wm] o [B,1,Hm,Wm]
     if pred.dim() == 3:
-        pred = pred.unsqueeze(1)                                 # [B,1,H',W']
+        pred = pred.unsqueeze(1)                         # -> [B,1,Hm,Wm]
 
     outs = []
-    for i, (Hi, Wi) in enumerate(orig_sizes):
-        di = F.interpolate(pred[i:i+1], size=(Hi, Wi), mode="bicubic", align_corners=False)
+    for i, ((Horig, Worig), (h_val, w_val)) in enumerate(zip(orig_sizes, proc_sizes)):
+        di_full = pred[i:i+1, :, :h_val, :w_val]         # recorte a región no acolchada
+        di = F.interpolate(di_full, size=(Horig, Worig), mode="bicubic", align_corners=False)
         depth_like = di.squeeze().detach().cpu().numpy()
-        depth01 = _to_01_and_resize(depth_like, Hi, Wi)
+        depth01 = _to_01_and_resize(depth_like, Horig, Worig)
         outs.append(depth01)
     return outs
+
+
 
 
 @torch.no_grad()

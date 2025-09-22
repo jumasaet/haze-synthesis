@@ -55,7 +55,7 @@ def main():
     ap.add_argument("--dst", required=True, help="Carpeta de salida (banco)")
     ap.add_argument("--max-dim", type=int, default=2048, help="Máximo lado mayor")
     ap.add_argument("--scales", type=str, default="1.0", help="Escalas separadas por coma, ej: 0.5,0.75,1.0,1.25")
-    ap.add_argument("--angles", type=str, default="-10,0,10", help="Ángulos en grados, ej: -10,-5,0,5,10")
+    ap.add_argument("--angles", type=str, default="-20,-10,-5,0,5,10,20", help="Ángulos en grados, ej: -10,-5,0,5,10")
     args = ap.parse_args()
 
     os.makedirs(args.dst, exist_ok=True)
